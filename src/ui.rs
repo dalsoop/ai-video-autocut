@@ -38,7 +38,10 @@ fn draw_log_modal(f: &mut Frame, area: Rect, app: &App) {
         width: w, height: h,
     };
     f.render_widget(ratatui::widgets::Clear, popup);
-    let lines: Vec<Line> = text.lines().rev().take((h as usize).saturating_sub(3)).rev()
+    let all_lines: Vec<&str> = text.lines().collect();
+    let visible = (h as usize).saturating_sub(3);
+    let start = all_lines.len().saturating_sub(visible);
+    let lines: Vec<Line> = all_lines[start..].iter()
         .map(|s| Line::from(truncate_right(s, (w as usize).saturating_sub(4)))).collect();
     let p = Paragraph::new(lines)
         .block(Block::default().borders(Borders::ALL)
