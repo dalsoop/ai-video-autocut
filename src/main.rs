@@ -139,6 +139,7 @@ async fn run<B: ratatui::backend::Backend>(
                     View::Projects => handle_projects(app, k.code).await,
                     View::Files => handle_files(app, k.code).await,
                     View::Subtitles => handle_subs(app, k.code).await,
+                    View::Settings => handle_settings(app, k.code).await,
                 }
                 if app.should_quit { break; }
             }
@@ -225,6 +226,7 @@ async fn handle_files(app: &mut App, code: KeyCode) {
     if keys::matches(code, &kb.transcribe) { app.transcribe().await; return; }
     if keys::matches(code, &kb.project) { app.view = View::Projects; return; }
     if keys::matches(code, &kb.refresh) { app.refresh_files().await; return; }
+    if matches!(code, KeyCode::Char('s')) { app.open_settings().await; return; }
     if keys::matches(code, &kb.engine_toggle) {
         app.engine = if app.engine == "qwen3" { "whisper".into() } else { "qwen3".into() };
         app.status = format!("engine → {}", app.engine);
@@ -252,6 +254,22 @@ async fn handle_files(app: &mut App, code: KeyCode) {
         KeyCode::Char('g') => app.file_cursor = 0,
         KeyCode::Char('G') => app.file_cursor = app.files.len().saturating_sub(1),
         KeyCode::Enter => app.select_file().await,
+        _ => {}
+    }
+}
+
+async fn handle_settings(app: &mut App, code: KeyCode) {
+    match code {
+        KeyCode::Esc | KeyCode::Char('q') => app.view = View::Files,
+        KeyCode::Up | KeyCode::Char('k') => {
+            if app.settings_cursor > 0 { app.settings_cursor -= 1; }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if app.settings_cursor + 1 < 4 { app.settings_cursor += 1; }
+        }
+        KeyCode::Left | KeyCode::Char('h') => app.settings_cycle(-1),
+        KeyCode::Right | KeyCode::Char('l') | KeyCode::Char(' ') => app.settings_cycle(1),
+        KeyCode::Enter => app.save_settings().await,
         _ => {}
     }
 }

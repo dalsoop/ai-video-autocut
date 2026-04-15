@@ -100,9 +100,13 @@ impl Client {
     }
 
     pub async fn set_project(&self, project: &str) -> Result<()> {
+        self.patch_config(&serde_json::json!({ "activeProject": project })).await
+    }
+
+    pub async fn patch_config(&self, patch: &serde_json::Value) -> Result<()> {
         self.http
             .post(format!("{}/api/config", self.base))
-            .json(&serde_json::json!({ "activeProject": project }))
+            .json(patch)
             .send().await?.error_for_status()?;
         Ok(())
     }

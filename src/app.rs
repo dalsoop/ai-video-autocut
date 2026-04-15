@@ -8,6 +8,15 @@ pub enum View {
     Projects,
     Files,
     Subtitles,
+    Settings,
+}
+
+#[derive(Clone, Default)]
+pub struct RemoteSettings {
+    pub default_engine: String,
+    pub default_lang: String,
+    pub default_whisper_model: String,
+    pub qwen3_device: String,
 }
 
 pub struct App {
@@ -35,6 +44,8 @@ pub struct App {
     pub confirm_cut: bool,
     pub preview: Option<SubtitleData>,
     pub preview_for: Option<String>,
+    pub settings: RemoteSettings,
+    pub settings_cursor: usize,
 }
 
 impl App {
@@ -55,6 +66,56 @@ impl App {
             search_mode: false, search_query: String::new(),
             confirm_cut: false,
             preview: None, preview_for: None,
+            settings: RemoteSettings::default(),
+            settings_cursor: 0,
+        }
+    }
+
+    pub async fn open_settings(&mut self) {
+        if let Ok(cfg) = self.client.get_config().await {
+            self.settings = RemoteSettings {
+                default_engine: cfg.get("defaultEngine").and_then(|v| v.as_str()).unwrap_or("qwen3").into(),
+                default_lang: cfg.get("defaultLang").and_then(|v| v.as_str()).unwrap_or("Korean").into(),
+                default_whisper_model: cfg.get("defaultWhisperModel").and_then(|v| v.as_str()).unwrap_or("medium").into(),
+                qwen3_device: cfg.get("qwen3Device").and_then(|v| v.as_str()).unwrap_or("cuda:0").into(),
+            };
+        }
+        self.settings_cursor = 0;
+        self.view = View::Settings;
+    }
+
+    pub fn settings_cycle(&mut self, delta: i32) {
+        let field = self.settings_cursor;
+        let cycle = |v: &mut String, opts: &[&str]| {
+            let i = opts.iter().position(|o| o == &v.as_str()).unwrap_or(0) as i32;
+            let n = opts.len() as i32;
+            let new = ((i + delta).rem_euclid(n)) as usize;
+            *v = opts[new].to_string();
+        };
+        match field {
+            0 => cycle(&mut self.settings.default_engine, &["qwen3", "whisper"]),
+            1 => cycle(&mut self.settings.default_lang, &["Korean", "English", "Japanese", "zh"]),
+            2 => cycle(&mut self.settings.default_whisper_model, &["tiny","base","small","medium","large-v3-turbo","large-v3"]),
+            3 => cycle(&mut self.settings.qwen3_device, &["cuda:0","cuda:1","cpu"]),
+            _ => {}
+        }
+    }
+
+    pub async fn save_settings(&mut self) {
+        let patch = serde_json::json!({
+            "defaultEngine": self.settings.default_engine,
+            "defaultLang": self.settings.default_lang,
+            "defaultWhisperModel": self.settings.default_whisper_model,
+            "qwen3Device": self.settings.qwen3_device,
+        });
+        match self.client.patch_config(&patch).await {
+            Ok(_) => {
+                self.engine = self.settings.default_engine.clone();
+                self.lang = self.settings.default_lang.clone();
+                self.status = "✓ 설정 저장됨".into();
+                self.view = View::Files;
+            }
+            Err(e) => self.status = format!("설정 저장 실패: {e}"),
         }
     }
 

@@ -19,6 +19,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         View::Projects => draw_projects(f, vsplit[1], app),
         View::Files => draw_files_with_preview(f, vsplit[1], app),
         View::Subtitles => draw_subtitles(f, vsplit[1], app),
+        View::Settings => draw_settings(f, vsplit[1], app),
     }
     draw_footer(f, vsplit[2], app);
     if app.show_help { draw_help(f, size); }
@@ -120,6 +121,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
             View::Projects => "[↑/↓ 이동] [Enter 선택] [q 종료]".to_string(),
             View::Files => "[↑/↓ 이동] [Enter 열기] [t 자막추출] [p 프로젝트] [r 새로고침] [q 종료]".into(),
             View::Subtitles => "[↑/↓ 이동] [Space 토글] [a 모두유지] [i 반전] [c 컷] [b 뒤로] [q 종료]".into(),
+            View::Settings => "[↑/↓ 이동] [←/→ 값변경] [Enter 저장] [Esc 취소]".into(),
         }
     };
     let mut lines = vec![Line::from(footer)];
@@ -128,6 +130,28 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     }
     let p = Paragraph::new(lines).block(Block::default().borders(Borders::ALL));
     f.render_widget(p, area);
+}
+
+fn draw_settings(f: &mut Frame, area: Rect, app: &App) {
+    let fields = [
+        ("기본 엔진", app.settings.default_engine.as_str()),
+        ("기본 언어", app.settings.default_lang.as_str()),
+        ("Whisper 모델", app.settings.default_whisper_model.as_str()),
+        ("Qwen3 디바이스", app.settings.qwen3_device.as_str()),
+    ];
+    let items: Vec<ListItem> = fields.iter().enumerate().map(|(i, (k, v))| {
+        let mut style = Style::default();
+        if i == app.settings_cursor {
+            style = Style::default().bg(Color::DarkGray).fg(Color::White).add_modifier(Modifier::BOLD);
+        }
+        ListItem::new(format!("  {:<18} {}", k, v)).style(style)
+    }).collect();
+    let list = List::new(items)
+        .block(Block::default().borders(Borders::ALL)
+            .title(" 설정 (←→ 값 변경, Enter 저장, Esc 취소) "));
+    let mut state = ListState::default();
+    state.select(Some(app.settings_cursor));
+    f.render_stateful_widget(list, area, &mut state);
 }
 
 fn draw_projects(f: &mut Frame, area: Rect, app: &App) {
