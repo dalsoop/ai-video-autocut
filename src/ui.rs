@@ -22,6 +22,31 @@ pub fn draw(f: &mut Frame, app: &App) {
     }
     draw_footer(f, vsplit[2], app);
     if app.show_help { draw_help(f, size); }
+    if app.confirm_cut { draw_confirm_cut(f, size, app); }
+}
+
+fn draw_confirm_cut(f: &mut Frame, area: Rect, app: &App) {
+    let w = 50.min(area.width);
+    let h = 8.min(area.height);
+    let popup = Rect {
+        x: (area.width - w) / 2,
+        y: (area.height - h) / 2,
+        width: w, height: h,
+    };
+    f.render_widget(ratatui::widgets::Clear, popup);
+    let (cnt, dur) = app.kept_count();
+    let filename = app.selected_file.as_ref().map(|f| f.name.as_str()).unwrap_or("");
+    let lines = vec![
+        Line::from(Span::styled("컷 편집 실행", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from(""),
+        Line::from(format!("파일: {}", truncate_right(filename, (w as usize).saturating_sub(6)))),
+        Line::from(format!("유지: {} 라인 / {:.1}초", cnt, dur)),
+        Line::from(""),
+        Line::from(Span::styled("  [Y/Enter 실행]   [N/Esc 취소]", Style::default().fg(Color::Cyan))),
+    ];
+    let p = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL).style(Style::default().bg(Color::Rgb(30,20,20))));
+    f.render_widget(p, popup);
 }
 
 fn draw_help(f: &mut Frame, area: Rect) {

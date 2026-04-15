@@ -1,0 +1,51 @@
+# phs service recipe: autocut-tui 배포
+# 사용: proxmox-host-setup service deploy autocut-tui --target <vmid>
+[service]
+name = "autocut-tui"
+description = "autocut TUI 클라이언트 (Rust + Ratatui + Nickel)"
+
+[deploy]
+target_default = 50064
+binary_path = "/usr/local/bin/autocut-tui"
+config_path = "/root/.config/autocut/config.ncl"
+
+[[deploy.steps]]
+name = "빌드"
+run = """
+cd /tmp/autocut-tui
+cargo build --release
+"""
+
+[[deploy.steps]]
+name = "배포"
+run = """
+pct push {vmid} /tmp/autocut-tui/target/release/autocut-tui /usr/local/bin/autocut-tui
+pct exec {vmid} -- chmod +x /usr/local/bin/autocut-tui
+"""
+
+[[deploy.steps]]
+name = "설정 템플릿"
+run = """
+pct exec {vmid} -- bash -c 'mkdir -p /root/.config/autocut
+if [ ! -f /root/.config/autocut/config.ncl ]; then
+cat > /root/.config/autocut/config.ncl <<EOF
+{
+  endpoint = "http://localhost:8080",
+  defaults = {
+    engine = "qwen3",
+    lang = "Korean",
+    whisper_model = "medium",
+  },
+  keybinds = {
+    # 사용자 정의 키바인드 예시
+    # transcribe = "T",
+    # cut = "X",
+  },
+}
+EOF
+fi'
+"""
+
+[verify]
+cmd = "/usr/local/bin/autocut-tui --version"
+expect_contains = "autocut-tui"

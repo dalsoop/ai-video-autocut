@@ -1,6 +1,7 @@
 mod api;
 mod app;
 mod config;
+mod keys;
 mod ui;
 mod util;
 
@@ -98,6 +99,19 @@ async fn run<B: ratatui::backend::Backend>(
                     handle_search(app, k.code);
                     continue;
                 }
+                // 컷 확인 다이얼로그 우선
+                if app.confirm_cut {
+                    match k.code {
+                        KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                            app.do_cut().await;
+                        }
+                        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                            app.confirm_cut = false;
+                        }
+                        _ => {}
+                    }
+                    continue;
+                }
                 // 도움말 모달 오픈 상태
                 if app.show_help {
                     if matches!(k.code, KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q')) {
@@ -187,8 +201,30 @@ async fn handle_projects(app: &mut App, code: KeyCode) {
 }
 
 async fn handle_files(app: &mut App, code: KeyCode) {
+    let kb = app.config.keybinds.clone();
+    if keys::matches(code, &kb.quit) || matches!(code, KeyCode::Esc) {
+        app.should_quit = true; return;
+    }
+    if keys::matches(code, &kb.search) {
+        app.search_mode = true; app.search_query.clear(); return;
+    }
+    if keys::matches(code, &kb.transcribe) { app.transcribe().await; return; }
+    if keys::matches(code, &kb.project) { app.view = View::Projects; return; }
+    if keys::matches(code, &kb.refresh) { app.refresh_files().await; return; }
+    if keys::matches(code, &kb.engine_toggle) {
+        app.engine = if app.engine == "qwen3" { "whisper".into() } else { "qwen3".into() };
+        app.status = format!("engine → {}", app.engine);
+        return;
+    }
+    if keys::matches(code, &kb.lang_toggle) {
+        app.lang = match app.lang.as_str() {
+            "Korean" => "English".into(), "English" => "Japanese".into(),
+            "Japanese" => "zh".into(), _ => "Korean".into(),
+        };
+        app.status = format!("lang → {}", app.lang);
+        return;
+    }
     match code {
-        KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
         KeyCode::Up | KeyCode::Char('k') => {
             if app.file_cursor > 0 { app.file_cursor -= 1; }
         }
@@ -202,31 +238,22 @@ async fn handle_files(app: &mut App, code: KeyCode) {
         KeyCode::Char('g') => app.file_cursor = 0,
         KeyCode::Char('G') => app.file_cursor = app.files.len().saturating_sub(1),
         KeyCode::Enter => app.select_file().await,
-        KeyCode::Char('t') => app.transcribe().await,
-        KeyCode::Char('p') => app.view = View::Projects,
-        KeyCode::Char('r') => app.refresh_files().await,
-        KeyCode::Char('/') => { app.search_mode = true; app.search_query.clear(); }
-        KeyCode::Char('e') => {
-            app.engine = if app.engine == "qwen3" { "whisper".into() } else { "qwen3".into() };
-            app.status = format!("engine → {}", app.engine);
-        }
-        KeyCode::Char('l') => {
-            app.lang = match app.lang.as_str() {
-                "Korean" => "English".into(),
-                "English" => "Japanese".into(),
-                "Japanese" => "zh".into(),
-                _ => "Korean".into(),
-            };
-            app.status = format!("lang → {}", app.lang);
-        }
         _ => {}
     }
 }
 
 async fn handle_subs(app: &mut App, code: KeyCode) {
+    let kb = app.config.keybinds.clone();
+    if keys::matches(code, &kb.quit) { app.should_quit = true; return; }
+    if matches!(code, KeyCode::Esc) || keys::matches(code, &kb.back) {
+        app.view = View::Files; return;
+    }
+    if keys::matches(code, &kb.toggle_line) { app.toggle_line(); return; }
+    if keys::matches(code, &kb.keep_all) { app.select_all_lines(true); return; }
+    if keys::matches(code, &kb.keep_none) { app.select_all_lines(false); return; }
+    if keys::matches(code, &kb.invert) { app.invert_lines(); return; }
+    if keys::matches(code, &kb.cut) { app.request_cut(); return; }
     match code {
-        KeyCode::Char('q') => app.should_quit = true,
-        KeyCode::Esc | KeyCode::Char('b') => app.view = View::Files,
         KeyCode::Up | KeyCode::Char('k') => {
             if app.sub_cursor > 0 { app.sub_cursor -= 1; }
         }
@@ -247,11 +274,6 @@ async fn handle_subs(app: &mut App, code: KeyCode) {
                 app.sub_cursor = s.lines.len().saturating_sub(1);
             }
         }
-        KeyCode::Char(' ') => app.toggle_line(),
-        KeyCode::Char('a') => app.select_all_lines(true),
-        KeyCode::Char('n') => app.select_all_lines(false),
-        KeyCode::Char('i') => app.invert_lines(),
-        KeyCode::Char('c') => app.do_cut().await,
         _ => {}
     }
 }

@@ -30,6 +30,7 @@ pub struct App {
     pub show_help: bool,
     pub search_mode: bool,
     pub search_query: String,
+    pub confirm_cut: bool,
 }
 
 impl App {
@@ -48,6 +49,7 @@ impl App {
             engine, lang,
             show_help: false,
             search_mode: false, search_query: String::new(),
+            confirm_cut: false,
         }
     }
 
@@ -139,7 +141,15 @@ impl App {
         }
     }
 
+    pub fn request_cut(&mut self) {
+        if self.subtitle.is_none() { self.status = "자막 없음".into(); return; }
+        let kept = self.kept_count();
+        if kept.0 == 0 { self.status = "유지할 라인이 없음".into(); return; }
+        self.confirm_cut = true;
+    }
+
     pub async fn do_cut(&mut self) {
+        self.confirm_cut = false;
         let f = match &self.selected_file { Some(f) => f.clone(), None => return };
         let keep: Vec<u32> = self.subtitle.as_ref()
             .map(|s| s.lines.iter().filter(|l| l.kept).map(|l| l.index).collect())
