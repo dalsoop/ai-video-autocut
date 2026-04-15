@@ -285,6 +285,7 @@ async fn handle_subs(app: &mut App, code: KeyCode) {
     if keys::matches(code, &kb.keep_none) { app.select_all_lines(false); return; }
     if keys::matches(code, &kb.invert) { app.invert_lines(); return; }
     if keys::matches(code, &kb.cut) { app.request_cut(); return; }
+    if keys::matches(code, &kb.transcribe) { app.transcribe().await; return; }
     match code {
         KeyCode::Up | KeyCode::Char('k') => {
             if app.sub_cursor > 0 { app.sub_cursor -= 1; }

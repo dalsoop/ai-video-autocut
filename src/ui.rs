@@ -120,7 +120,7 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
         match app.view {
             View::Projects => "[↑/↓ 이동] [Enter 선택] [q 종료]".to_string(),
             View::Files => "[↑/↓ 이동] [Enter 열기] [t 자막추출] [p 프로젝트] [r 새로고침] [q 종료]".into(),
-            View::Subtitles => "[↑/↓ 이동] [Space 토글] [a 모두유지] [i 반전] [c 컷] [b 뒤로] [q 종료]".into(),
+            View::Subtitles => "[↑/↓ 이동] [Space 토글] [a 유지] [i 반전] [c 컷] [t 재추출] [b 뒤로] [q 종료]".into(),
             View::Settings => "[↑/↓ 이동] [←/→ 값변경] [Enter 저장] [Esc 취소]".into(),
         }
     };
