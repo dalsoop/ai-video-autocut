@@ -127,6 +127,13 @@ async fn run<B: ratatui::backend::Backend>(
                     }
                     continue;
                 }
+                // 로그 모달 오픈 상태
+                if app.log_open.is_some() {
+                    if matches!(k.code, KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('L')) {
+                        app.log_open = None;
+                    }
+                    continue;
+                }
                 // 도움말 모달 오픈 상태
                 if app.show_help {
                     if matches!(k.code, KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q')) {
@@ -229,6 +236,8 @@ async fn handle_files(app: &mut App, code: KeyCode) {
     if keys::matches(code, &kb.refresh) { app.refresh_files().await; return; }
     if matches!(code, KeyCode::Char('s')) { app.open_settings().await; return; }
     if matches!(code, KeyCode::Char('B')) { app.batch_transcribe().await; return; }
+    if matches!(code, KeyCode::Char('L')) { app.view_last_job_log().await; return; }
+    if matches!(code, KeyCode::Char('d')) { app.delete_selected_file().await; return; }
     if keys::matches(code, &kb.engine_toggle) {
         app.engine = if app.engine == "qwen3" { "whisper".into() } else { "qwen3".into() };
         app.status = format!("engine → {}", app.engine);
@@ -330,6 +339,11 @@ async fn handle_subs(app: &mut App, code: KeyCode) {
     if matches!(code, KeyCode::Char('S')) { app.split_current().await; return; }
     if matches!(code, KeyCode::Char('M')) { app.merge_current().await; return; }
     if matches!(code, KeyCode::Char('/')) { app.sub_search = Some(String::new()); return; }
+    if matches!(code, KeyCode::Char(',')) { app.nudge_current(-0.1, 0.0).await; return; }
+    if matches!(code, KeyCode::Char('.')) { app.nudge_current(0.1, 0.0).await; return; }
+    if matches!(code, KeyCode::Char('<')) { app.nudge_current(0.0, -0.1).await; return; }
+    if matches!(code, KeyCode::Char('>')) { app.nudge_current(0.0, 0.1).await; return; }
+    if matches!(code, KeyCode::Char('L')) { app.view_last_job_log().await; return; }
     if keys::matches(code, &kb.toggle_line) { app.toggle_line(); return; }
     if keys::matches(code, &kb.keep_all) { app.select_all_lines(true); return; }
     if keys::matches(code, &kb.keep_none) { app.select_all_lines(false); return; }

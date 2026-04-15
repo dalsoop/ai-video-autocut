@@ -26,6 +26,26 @@ pub fn draw(f: &mut Frame, app: &App) {
     if app.confirm_cut { draw_confirm_cut(f, size, app); }
     if app.editing_line { draw_edit_modal(f, size, app); }
     if app.label_mode { draw_label_modal(f, size, app); }
+    if app.log_open.is_some() { draw_log_modal(f, size, app); }
+}
+
+fn draw_log_modal(f: &mut Frame, area: Rect, app: &App) {
+    let Some((id, text)) = &app.log_open else { return };
+    let w = (area.width * 9 / 10).max(60);
+    let h = (area.height * 9 / 10).max(15);
+    let popup = Rect {
+        x: (area.width - w) / 2, y: (area.height - h) / 2,
+        width: w, height: h,
+    };
+    f.render_widget(ratatui::widgets::Clear, popup);
+    let lines: Vec<Line> = text.lines().rev().take((h as usize).saturating_sub(3)).rev()
+        .map(|s| Line::from(truncate_right(s, (w as usize).saturating_sub(4)))).collect();
+    let p = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL)
+            .title(format!(" 📜 작업 로그 {} (L/Esc/q 닫기) ", &id[..8.min(id.len())]))
+            .style(Style::default().bg(Color::Rgb(15,15,20))))
+        .wrap(Wrap { trim: false });
+    f.render_widget(p, popup);
 }
 
 fn draw_label_modal(f: &mut Frame, area: Rect, app: &App) {
@@ -123,15 +143,18 @@ fn draw_help(f: &mut Frame, area: Rect) {
         Line::from("    /           파일명 검색"),
         Line::from("    t           자막 추출"),
         Line::from("    B           미추출 전체 배치 추출"),
+        Line::from("    d           선택 파일 삭제 (자막/편집본 캐스케이드)"),
+        Line::from("    L           최근 작업 로그 보기"),
         Line::from("    e           엔진 토글 / l 언어 토글"),
         Line::from("    s           설정 / p 프로젝트 변경"),
         Line::from(""),
         Line::from(Span::styled("  자막 편집", Style::default().fg(Color::Yellow))),
         Line::from("    Space       라인 토글  / a 모두 유지 / n 모두 제거 / i 반전"),
         Line::from("    E           라인 텍스트 편집"),
+        Line::from("    , / .       시작 -0.1/+0.1초  (< / > 끝 -0.1/+0.1초)"),
         Line::from("    S           라인 split / M 다음과 merge"),
         Line::from("    /           자막 내 검색"),
-        Line::from("    c           컷 실행  / t 재추출"),
+        Line::from("    c           컷 실행  / t 재추출  / L 로그"),
         Line::from("    Esc, b      파일 뷰로"),
         Line::from(""),
         Line::from(Span::styled("  작업 진행 중", Style::default().fg(Color::Yellow))),
@@ -178,8 +201,8 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     } else {
         match app.view {
             View::Projects => "[↑/↓ 이동] [Enter 선택] [q 종료]".to_string(),
-            View::Files => format!("[↑/↓] [Enter] [t 추출] [B 배치({}대기)] [/ 검색] [s 설정] [p 프로젝트] [q]", app.pending_count),
-            View::Subtitles => "[↑/↓] [Space] [a/n/i] [E 편집] [S split] [M merge] [/ 검색] [c 컷] [t 재추출] [b] [q]".into(),
+            View::Files => format!("[↑/↓] [Enter] [t 추출] [B 배치({})] [d 삭제] [L 로그] [/ 검색] [s 설정] [p] [q]", app.pending_count),
+            View::Subtitles => "[Space] [E 편집] [,/. nudge] [S/M split/merge] [/ 검색] [c 컷] [t 재추출] [L 로그] [b] [q]".into(),
             View::Settings => "[↑/↓ 이동] [←/→ 값변경] [Enter 저장] [Esc 취소]".into(),
         }
     };
@@ -323,9 +346,14 @@ fn draw_subtitles(f: &mut Frame, area: Rect, app: &App) {
         return;
     };
     let (kept_cnt, kept_dur) = app.kept_count();
-    let title = format!(" {} │ {}/{} 유지 │ {:.1}s/{:.1}s ",
+    let engine_tag = match sub.engine.as_deref() {
+        Some("qwen3") => " [Qwen3-ASR]".to_string(),
+        Some("whisper") => format!(" [Whisper{}]", sub.whisper_model.as_deref().map(|m| format!("/{}", m)).unwrap_or_default()),
+        _ => String::new(),
+    };
+    let title = format!(" {} │{} {}/{} 유지 │ {:.1}s/{:.1}s ",
         app.selected_file.as_ref().map(|f| f.name.as_str()).unwrap_or(""),
-        kept_cnt, sub.lines.len(), kept_dur, sub.total_duration);
+        engine_tag, kept_cnt, sub.lines.len(), kept_dur, sub.total_duration);
 
     let text_w = (area.width as usize).saturating_sub(18);
     let items: Vec<ListItem> = sub.lines.iter().enumerate().map(|(i, l)| {

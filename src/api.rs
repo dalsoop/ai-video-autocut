@@ -43,6 +43,12 @@ pub struct SubtitleData {
     pub has_srt: bool,
     #[serde(rename = "hasMd")]
     pub has_md: bool,
+    #[serde(default)]
+    pub engine: Option<String>,
+    #[serde(rename = "whisperModel", default)]
+    pub whisper_model: Option<String>,
+    #[serde(default)]
+    pub lang: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -136,6 +142,10 @@ impl Client {
         Ok(self.http.get(format!("{}/api/jobs/{}", self.base, id)).send().await?.json().await?)
     }
 
+    pub async fn list_jobs(&self) -> Result<Vec<Job>> {
+        Ok(self.http.get(format!("{}/api/jobs", self.base)).send().await?.json().await?)
+    }
+
     pub async fn cancel(&self, id: &str) -> Result<()> {
         self.http.post(format!("{}/api/jobs/{}/cancel", self.base, id))
             .send().await?.error_for_status()?;
@@ -174,6 +184,26 @@ impl Client {
     pub async fn pending(&self) -> Result<Vec<String>> {
         Ok(self.http.get(format!("{}/api/pending", self.base))
             .send().await?.json().await?)
+    }
+
+    pub async fn nudge(&self, filename: &str, index: u32, d_start: f64, d_end: f64) -> Result<()> {
+        let enc = encode_path(filename);
+        self.http.patch(format!("{}/api/subtitle/{}", self.base, enc))
+            .json(&serde_json::json!({ "action": "nudge", "index": index, "deltaStart": d_start, "deltaEnd": d_end }))
+            .send().await?.error_for_status()?;
+        Ok(())
+    }
+
+    pub async fn job_log(&self, id: &str) -> Result<String> {
+        Ok(self.http.get(format!("{}/api/jobs/{}/log", self.base, id))
+            .send().await?.text().await?)
+    }
+
+    pub async fn delete_file(&self, filename: &str) -> Result<()> {
+        let enc = encode_path(filename);
+        self.http.delete(format!("{}/api/media/{}", self.base, enc))
+            .send().await?.error_for_status()?;
+        Ok(())
     }
 }
 

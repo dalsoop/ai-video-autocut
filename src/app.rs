@@ -52,6 +52,7 @@ pub struct App {
     pub pending_count: usize,
     pub label_mode: bool,
     pub label_buffer: String,
+    pub log_open: Option<(String, String)>,  // (job_id, text)
 }
 
 impl App {
@@ -78,7 +79,39 @@ impl App {
             sub_search: None,
             pending_count: 0,
             label_mode: false, label_buffer: String::new(),
+            log_open: None,
         }
+    }
+
+    pub async fn nudge_current(&mut self, d_start: f64, d_end: f64) {
+        let Some(sub) = &self.subtitle else { return };
+        let Some(l) = sub.lines.get(self.sub_cursor) else { return };
+        let idx = l.index;
+        let Some(f) = self.selected_file.clone() else { return };
+        if let Err(e) = self.client.nudge(&f.name, idx, d_start, d_end).await {
+            self.status = format!("nudge 실패: {e}"); return;
+        }
+        if let Ok(s) = self.client.subtitle(&f.name).await { self.subtitle = Some(s); }
+    }
+
+    pub async fn view_last_job_log(&mut self) {
+        // 최근 job(running or failed) 로그
+        if let Ok(jobs) = self.client.list_jobs().await {
+            if let Some(j) = jobs.first() {
+                if let Ok(text) = self.client.job_log(&j.id).await {
+                    self.log_open = Some((j.id.clone(), text));
+                }
+            }
+        }
+    }
+
+    pub async fn delete_selected_file(&mut self) {
+        let Some(f) = self.files.get(self.file_cursor).cloned() else { return };
+        if let Err(e) = self.client.delete_file(&f.name).await {
+            self.status = format!("삭제 실패: {e}"); return;
+        }
+        self.status = format!("✓ 삭제: {}", f.name);
+        self.refresh_files().await;
     }
 
     pub async fn refresh_pending(&mut self) {
