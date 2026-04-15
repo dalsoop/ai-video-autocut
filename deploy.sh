@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# autocut-tui 빌드 + 배포
+# ai-video-autocut 빌드 + 배포
 # 사용법: ./deploy.sh [vmid=50064]
 set -euo pipefail
 VMID="${1:-50064}"
@@ -36,4 +36,4 @@ EOF
 echo "config 생성됨: /root/.config/autocut/config.ncl"
 fi'
 
-echo "완료. 사용: pct enter $VMID pct enter $VMID && autocut-tuipct enter $VMID && autocut-tui ai-video-autocut"
+echo "완료. 사용: pct enter $VMID && ai-video-autocut"
