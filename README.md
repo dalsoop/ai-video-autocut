@@ -1,4 +1,4 @@
-# autocut-tui
+# ai-video-autocut
 
 터미널 기반 autocut 클라이언트. Rust + Ratatui + Nickel.
 
@@ -9,7 +9,7 @@ autocut-web HTTP API를 호출해서 **SSH로 접속한 터미널에서** Qwen3-
 ```bash
 cargo build --release
 ./deploy.sh 50064    # LXC 50064에 배포
-pct enter 50064 && autocut-tui
+pct enter 50064 && ai-video-autocut
 ```
 
 ## 스크린샷
@@ -52,7 +52,7 @@ Space로 라인 토글, `a`/`n` 모두 유지/제거, `i` 반전, `c` 컷 실행
 - **자막 뷰:** `Space` 토글, `a/n/i` 전체유지/제거/반전, `c` 컷, `Esc` 뒤로
 - **공통:** `?` 도움말, `q` 종료, `Ctrl+C` 강제종료, 진행중에 `Esc`로 취소
 
-`autocut-tui --keys` 전체 목록 출력.
+`ai-video-autocut --keys` 전체 목록 출력.
 
 ## 설정 (Nickel)
 

@@ -6,7 +6,7 @@ description = "autocut TUI 클라이언트 (Rust + Ratatui + Nickel)"
 
 [deploy]
 target_default = 50064
-binary_path = "/usr/local/bin/autocut-tui"
+binary_path = "/usr/local/bin/ai-video-autocut"
 config_path = "/root/.config/autocut/config.ncl"
 
 [[deploy.steps]]
@@ -19,8 +19,8 @@ cargo build --release
 [[deploy.steps]]
 name = "배포"
 run = """
-pct push {vmid} /tmp/autocut-tui/target/release/autocut-tui /usr/local/bin/autocut-tui
-pct exec {vmid} -- chmod +x /usr/local/bin/autocut-tui
+pct push {vmid} /tmp/autocut-tui/target/release/autocut-tui /usr/local/bin/ai-video-autocut
+pct exec {vmid} -- chmod +x /usr/local/bin/ai-video-autocut
 """
 
 [[deploy.steps]]
@@ -47,5 +47,5 @@ fi'
 """
 
 [verify]
-cmd = "/usr/local/bin/autocut-tui --version"
+cmd = "/usr/local/bin/ai-video-autocut --version"
 expect_contains = "autocut-tui"
