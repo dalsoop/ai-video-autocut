@@ -1,4 +1,6 @@
 use crate::api::{Client, FileInfo, SubtitleData, SubtitleLine};
+#[allow(unused_imports)]
+use crate::api::*;
 use crate::config::Config;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -31,6 +33,8 @@ pub struct App {
     pub search_mode: bool,
     pub search_query: String,
     pub confirm_cut: bool,
+    pub preview: Option<SubtitleData>,
+    pub preview_for: Option<String>,
 }
 
 impl App {
@@ -50,6 +54,20 @@ impl App {
             show_help: false,
             search_mode: false, search_query: String::new(),
             confirm_cut: false,
+            preview: None, preview_for: None,
+        }
+    }
+
+    pub async fn refresh_preview(&mut self) {
+        let Some(f) = self.files.get(self.file_cursor).cloned() else {
+            self.preview = None; self.preview_for = None; return;
+        };
+        if self.preview_for.as_deref() == Some(&f.name) { return; }
+        self.preview_for = Some(f.name.clone());
+        if !f.has_subtitle { self.preview = None; return; }
+        match self.client.subtitle(&f.name).await {
+            Ok(s) => self.preview = Some(s),
+            Err(_) => self.preview = None,
         }
     }
 
@@ -226,5 +244,10 @@ impl App {
             let kept: Vec<&SubtitleLine> = s.lines.iter().filter(|l| l.kept).collect();
             (kept.len(), kept.iter().map(|l| l.duration).sum())
         } else { (0, 0.0) }
+    }
+
+    pub fn kept_count_for(&self, s: &SubtitleData) -> (usize, f64) {
+        let kept: Vec<&SubtitleLine> = s.lines.iter().filter(|l| l.kept).collect();
+        (kept.len(), kept.iter().map(|l| l.duration).sum())
     }
 }

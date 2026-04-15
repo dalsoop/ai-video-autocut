@@ -170,15 +170,67 @@ fn draw_files_with_preview(f: &mut Frame, area: Rect, app: &App) {
     *state.offset_mut() = compute_viewport(app.file_cursor, visible, app.files.len());
     f.render_stateful_widget(list, hsplit[0], &mut state);
 
-    // 오른쪽: 결과물
+    // 오른쪽: 자막 미리보기 + 결과물
+    let rsplit = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(65), Constraint::Percentage(35)])
+        .split(hsplit[1]);
+
+    draw_preview(f, rsplit[0], app);
+
     let outs: Vec<ListItem> = app.outputs.iter().map(|o| {
         let label = o.source.as_deref().unwrap_or(&o.name);
-        ListItem::new(format!("{} ({})", label, human_size(o.size)))
+        let tw = (rsplit[1].width as usize).saturating_sub(4);
+        ListItem::new(truncate_right(&format!("{} ({})", label, human_size(o.size)), tw))
     }).collect();
     let olist = List::new(outs)
         .block(Block::default().borders(Borders::ALL)
             .title(format!(" 편집본 ({}) ", app.outputs.len())));
-    f.render_widget(olist, hsplit[1]);
+    f.render_widget(olist, rsplit[1]);
+}
+
+fn draw_preview(f: &mut Frame, area: Rect, app: &App) {
+    let tw = (area.width as usize).saturating_sub(12);
+    let (title, lines) = match (&app.preview, app.files.get(app.file_cursor)) {
+        (_, None) => (" 미리보기 ".to_string(), vec![Line::from("파일 없음")]),
+        (None, Some(f)) if !f.has_subtitle => (
+            format!(" 미리보기 (자막 없음) "),
+            vec![
+                Line::from(Span::styled("자막이 아직 없습니다.", Style::default().fg(Color::DarkGray))),
+                Line::from(""),
+                Line::from(Span::styled("  [t] 자막 추출", Style::default().fg(Color::Cyan))),
+            ],
+        ),
+        (None, Some(_)) => (
+            " 미리보기 ".into(),
+            vec![Line::from(Span::styled("로딩…", Style::default().fg(Color::DarkGray)))],
+        ),
+        (Some(sub), Some(_)) => {
+            let (kept, _) = app.kept_count_for(sub);
+            let mut ls: Vec<Line> = vec![
+                Line::from(Span::styled(
+                    format!("{} 라인 • {} 유지 • {:.1}초", sub.lines.len(), kept, sub.total_duration),
+                    Style::default().fg(Color::Yellow),
+                )),
+                Line::from(""),
+            ];
+            for l in sub.lines.iter().take(((area.height as usize).saturating_sub(4)).max(3)) {
+                let mark = if l.kept { "✓" } else { "·" };
+                let t = fmt_time(l.start);
+                let text = truncate_right(&l.text, tw);
+                let style = if l.kept { Style::default().fg(Color::Green) } else { Style::default().fg(Color::DarkGray) };
+                ls.push(Line::from(vec![
+                    Span::styled(format!("{mark} "), style),
+                    Span::styled(format!("{t} ", ), Style::default().fg(Color::DarkGray)),
+                    Span::styled(text, style),
+                ]));
+            }
+            (" 자막 미리보기 ".into(), ls)
+        }
+    };
+    let p = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL).title(title));
+    f.render_widget(p, area);
 }
 
 fn draw_subtitles(f: &mut Frame, area: Rect, app: &App) {

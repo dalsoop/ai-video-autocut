@@ -72,12 +72,26 @@ async fn run<B: ratatui::backend::Backend>(
     app: &mut App,
 ) -> Result<()> {
     let mut last_poll = std::time::Instant::now();
+    let mut last_cursor = usize::MAX;
+    let mut cursor_changed_at = std::time::Instant::now();
     loop {
         term.draw(|f| ui::draw(f, app))?;
 
         if app.job_progress.is_some() && last_poll.elapsed() > Duration::from_millis(1500) {
             app.poll_job().await;
             last_poll = std::time::Instant::now();
+        }
+
+        // 파일 뷰에서 커서가 잠시 멈추면 미리보기 로드
+        if matches!(app.view, app::View::Files) {
+            if app.file_cursor != last_cursor {
+                last_cursor = app.file_cursor;
+                cursor_changed_at = std::time::Instant::now();
+            } else if cursor_changed_at.elapsed() > Duration::from_millis(250)
+                && app.preview_for.as_deref() != app.files.get(app.file_cursor).map(|f| f.name.as_str())
+            {
+                app.refresh_preview().await;
+            }
         }
 
         if event::poll(Duration::from_millis(if app.job_progress.is_some() { 500 } else { 200 }))? {
