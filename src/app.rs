@@ -50,6 +50,8 @@ pub struct App {
     pub edit_buffer: String,
     pub sub_search: Option<String>,
     pub pending_count: usize,
+    pub label_mode: bool,
+    pub label_buffer: String,
 }
 
 impl App {
@@ -75,6 +77,7 @@ impl App {
             editing_line: false, edit_buffer: String::new(),
             sub_search: None,
             pending_count: 0,
+            label_mode: false, label_buffer: String::new(),
         }
     }
 
@@ -315,7 +318,9 @@ impl App {
             .map(|s| s.lines.iter().filter(|l| l.kept).map(|l| l.index).collect())
             .unwrap_or_default();
         if keep.is_empty() { self.status = "유지할 라인이 없음".into(); return; }
-        let req = crate::api::CutRequest { filename: &f.name, keep_indices: keep };
+        let label = if self.label_buffer.trim().is_empty() { None } else { Some(self.label_buffer.trim().to_string()) };
+        self.label_buffer.clear();
+        let req = crate::api::CutRequest { filename: &f.name, keep_indices: keep, label };
         match self.client.cut(&req).await {
             Ok(job) => {
                 self.job_progress = Some((job.id, 0, "컷 편집 중...".into()));

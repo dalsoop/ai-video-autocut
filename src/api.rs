@@ -72,6 +72,8 @@ pub struct CutRequest<'a> {
     pub filename: &'a str,
     #[serde(rename = "keepIndices")]
     pub keep_indices: Vec<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
 }
 
 #[derive(Clone)]

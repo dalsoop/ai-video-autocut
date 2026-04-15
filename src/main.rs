@@ -150,7 +150,7 @@ async fn run<B: ratatui::backend::Backend>(
 }
 
 fn print_keybinds() {
-    println!("autocut-tui v{} — 키바인드", env!("CARGO_PKG_VERSION"));
+    println!("ai-video-autocut v{} — 키바인드", env!("CARGO_PKG_VERSION"));
     println!();
     println!("[공통]");
     println!("  ?           도움말 토글");
@@ -277,6 +277,17 @@ async fn handle_settings(app: &mut App, code: KeyCode) {
 }
 
 async fn handle_subs(app: &mut App, code: KeyCode) {
+    // 라벨 입력 중
+    if app.label_mode {
+        match code {
+            KeyCode::Esc => { app.label_mode = false; app.label_buffer.clear(); }
+            KeyCode::Enter => { app.label_mode = false; app.request_cut(); }
+            KeyCode::Backspace => { app.label_buffer.pop(); }
+            KeyCode::Char(c) => app.label_buffer.push(c),
+            _ => {}
+        }
+        return;
+    }
     // 편집 중: 키를 텍스트 입력으로 처리
     if app.editing_line {
         match code {
@@ -323,7 +334,10 @@ async fn handle_subs(app: &mut App, code: KeyCode) {
     if keys::matches(code, &kb.keep_all) { app.select_all_lines(true); return; }
     if keys::matches(code, &kb.keep_none) { app.select_all_lines(false); return; }
     if keys::matches(code, &kb.invert) { app.invert_lines(); return; }
-    if keys::matches(code, &kb.cut) { app.request_cut(); return; }
+    if keys::matches(code, &kb.cut) {
+        app.label_mode = true; app.label_buffer.clear();
+        return;
+    }
     if keys::matches(code, &kb.transcribe) { app.transcribe().await; return; }
     match code {
         KeyCode::Up | KeyCode::Char('k') => {

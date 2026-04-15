@@ -24,6 +24,56 @@ pub fn draw(f: &mut Frame, app: &App) {
     draw_footer(f, vsplit[2], app);
     if app.show_help { draw_help(f, size); }
     if app.confirm_cut { draw_confirm_cut(f, size, app); }
+    if app.editing_line { draw_edit_modal(f, size, app); }
+    if app.label_mode { draw_label_modal(f, size, app); }
+}
+
+fn draw_label_modal(f: &mut Frame, area: Rect, app: &App) {
+    let w = 60.min(area.width);
+    let h: u16 = 7;
+    let popup = Rect {
+        x: (area.width - w) / 2, y: (area.height - h) / 2,
+        width: w, height: h,
+    };
+    f.render_widget(ratatui::widgets::Clear, popup);
+    let (cnt, dur) = app.kept_count();
+    let lines = vec![
+        Line::from(Span::styled("컷 편집 라벨 (선택)", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(format!("유지 {} 라인 / {:.1}초", cnt, dur), Style::default().fg(Color::DarkGray))),
+        Line::from(""),
+        Line::from(Span::styled(format!("라벨> {}█", app.label_buffer), Style::default().fg(Color::White))),
+        Line::from(Span::styled("  [Enter 실행]   [Esc 취소]   (비워두면 타임스탬프만)", Style::default().fg(Color::Cyan))),
+    ];
+    let p = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL).style(Style::default().bg(Color::Rgb(30,20,30))))
+        .wrap(Wrap { trim: false });
+    f.render_widget(p, popup);
+}
+
+fn draw_edit_modal(f: &mut Frame, area: Rect, app: &App) {
+    let w = (area.width * 4 / 5).min(100).max(40);
+    let h: u16 = 7;
+    let popup = Rect {
+        x: (area.width - w) / 2,
+        y: (area.height - h) / 2,
+        width: w, height: h,
+    };
+    f.render_widget(ratatui::widgets::Clear, popup);
+    let orig = app.subtitle.as_ref()
+        .and_then(|s| s.lines.get(app.sub_cursor))
+        .map(|l| l.text.as_str()).unwrap_or("");
+    let lines = vec![
+        Line::from(Span::styled("자막 라인 편집", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(format!("원본: {}", orig), Style::default().fg(Color::DarkGray))),
+        Line::from(""),
+        Line::from(Span::styled(format!("편집> {}█", app.edit_buffer), Style::default().fg(Color::White))),
+        Line::from(Span::styled("  [Enter 저장]   [Esc 취소]   [Backspace 지우기]", Style::default().fg(Color::Cyan))),
+    ];
+    let p = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL)
+            .style(Style::default().bg(Color::Rgb(20, 30, 20))))
+        .wrap(Wrap { trim: false });
+    f.render_widget(p, popup);
 }
 
 fn draw_confirm_cut(f: &mut Frame, area: Rect, app: &App) {
@@ -60,7 +110,7 @@ fn draw_help(f: &mut Frame, area: Rect) {
     };
     f.render_widget(ratatui::widgets::Clear, popup);
     let lines = vec![
-        Line::from(Span::styled("autocut-tui 키바인드", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled("ai-video-autocut 키바인드", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
         Line::from(""),
         Line::from(Span::styled("  공통", Style::default().fg(Color::Yellow))),
         Line::from("    ?           도움말 토글"),
@@ -98,19 +148,14 @@ fn draw_help(f: &mut Frame, area: Rect) {
 fn draw_header(f: &mut Frame, area: Rect, app: &App) {
     let proj = app.active_project.as_deref().unwrap_or("(미선택)");
     let engine = &app.engine;
-    let title = format!(" autocut-tui │ project: {proj} │ engine: {engine} │ lang: {} ", app.lang);
+    let title = format!(" ai-video-autocut │ project: {proj} │ engine: {engine} │ lang: {} ", app.lang);
     let p = Paragraph::new(title).style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .block(Block::default().borders(Borders::ALL));
     f.render_widget(p, area);
 }
 
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
-    let footer = if app.editing_line {
-        let p = Paragraph::new(format!("편집> {}", app.edit_buffer))
-            .block(Block::default().borders(Borders::ALL).title(" 자막 텍스트 편집 (Enter 저장, Esc 취소) "))
-            .style(Style::default().fg(Color::Yellow));
-        f.render_widget(p, area); return;
-    } else if let Some(q) = &app.sub_search {
+    let footer = if let Some(q) = &app.sub_search {
         let p = Paragraph::new(format!("/{}", q))
             .block(Block::default().borders(Borders::ALL).title(" 자막 내 검색 (Enter, Esc) "))
             .style(Style::default().fg(Color::Cyan));
