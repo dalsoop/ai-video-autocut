@@ -129,6 +129,12 @@ impl Client {
     pub async fn job(&self, id: &str) -> Result<Job> {
         Ok(self.http.get(format!("{}/api/jobs/{}", self.base, id)).send().await?.json().await?)
     }
+
+    pub async fn cancel(&self, id: &str) -> Result<()> {
+        self.http.post(format!("{}/api/jobs/{}/cancel", self.base, id))
+            .send().await?.error_for_status()?;
+        Ok(())
+    }
 }
 
 fn encode_path(p: &str) -> String {

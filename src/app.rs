@@ -178,6 +178,17 @@ impl App {
         }
     }
 
+    pub async fn cancel_job(&mut self) {
+        let id = match &self.job_progress { Some((id, _, _)) => id.clone(), None => return };
+        match self.client.cancel(&id).await {
+            Ok(_) => {
+                self.status = "작업 취소 요청".into();
+                self.job_progress = None;
+            }
+            Err(e) => self.status = format!("취소 실패: {e}"),
+        }
+    }
+
     pub fn kept_count(&self) -> (usize, f64) {
         if let Some(s) = &self.subtitle {
             let kept: Vec<&SubtitleLine> = s.lines.iter().filter(|l| l.kept).collect();

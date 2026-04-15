@@ -35,7 +35,8 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let footer = if let Some((_, pct, msg)) = &app.job_progress {
         let gauge = Gauge::default()
-            .block(Block::default().borders(Borders::ALL).title(format!(" {msg} ")))
+            .block(Block::default().borders(Borders::ALL)
+                .title(format!(" {msg}  [ESC로 취소] ")))
             .gauge_style(Style::default().fg(Color::Green))
             .percent((*pct).min(100) as u16);
         f.render_widget(gauge, area);

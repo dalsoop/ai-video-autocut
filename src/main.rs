@@ -70,6 +70,17 @@ async fn run<B: ratatui::backend::Backend>(
         if event::poll(Duration::from_millis(200))? {
             if let Event::Key(k) = event::read()? {
                 if k.kind != KeyEventKind::Press { continue; }
+                // 작업 중이면 ESC로 취소
+                if app.job_progress.is_some() && matches!(k.code, KeyCode::Esc) {
+                    app.cancel_job().await;
+                    continue;
+                }
+                // Ctrl+C 종료
+                if matches!(k.code, KeyCode::Char('c')) && k.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                    if app.job_progress.is_some() { app.cancel_job().await; }
+                    app.should_quit = true;
+                    break;
+                }
                 match app.view {
                     View::Projects => handle_projects(app, k.code).await,
                     View::Files => handle_files(app, k.code).await,
