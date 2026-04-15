@@ -2,6 +2,7 @@ mod api;
 mod app;
 mod config;
 mod ui;
+mod util;
 
 use anyhow::Result;
 use app::{App, View};
@@ -25,11 +26,15 @@ struct Cli {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let mut cfg = config::load().unwrap_or_default();
+    let (mut cfg, cfg_err) = match config::load() {
+        Ok(c) => (c, None),
+        Err(e) => (config::Config::default(), Some(format!("config 로드 실패: {e} — 기본값 사용"))),
+    };
     if let Some(e) = cli.endpoint { cfg.endpoint = e; }
 
     let client = api::Client::new(&cfg.endpoint);
     let mut app = App::new(client, cfg);
+    if let Some(e) = cfg_err { app.status = e; }
     app.refresh_projects().await;
     if app.active_project.is_some() {
         app.refresh_files().await;
@@ -101,6 +106,12 @@ async fn handle_files(app: &mut App, code: KeyCode) {
         KeyCode::Down | KeyCode::Char('j') => {
             if app.file_cursor + 1 < app.files.len() { app.file_cursor += 1; }
         }
+        KeyCode::PageUp => app.file_cursor = app.file_cursor.saturating_sub(10),
+        KeyCode::PageDown => {
+            app.file_cursor = (app.file_cursor + 10).min(app.files.len().saturating_sub(1));
+        }
+        KeyCode::Char('g') => app.file_cursor = 0,
+        KeyCode::Char('G') => app.file_cursor = app.files.len().saturating_sub(1),
         KeyCode::Enter => app.select_file().await,
         KeyCode::Char('t') => app.transcribe().await,
         KeyCode::Char('p') => app.view = View::Projects,
@@ -109,20 +120,41 @@ async fn handle_files(app: &mut App, code: KeyCode) {
             app.engine = if app.engine == "qwen3" { "whisper".into() } else { "qwen3".into() };
             app.status = format!("engine → {}", app.engine);
         }
+        KeyCode::Char('l') => {
+            app.lang = match app.lang.as_str() {
+                "Korean" => "English".into(),
+                "English" => "Japanese".into(),
+                "Japanese" => "zh".into(),
+                _ => "Korean".into(),
+            };
+            app.status = format!("lang → {}", app.lang);
+        }
         _ => {}
     }
 }
 
 async fn handle_subs(app: &mut App, code: KeyCode) {
     match code {
-        KeyCode::Char('q') | KeyCode::Esc => app.should_quit = true,
-        KeyCode::Char('b') => app.view = View::Files,
+        KeyCode::Char('q') => app.should_quit = true,
+        KeyCode::Esc | KeyCode::Char('b') => app.view = View::Files,
         KeyCode::Up | KeyCode::Char('k') => {
             if app.sub_cursor > 0 { app.sub_cursor -= 1; }
         }
         KeyCode::Down | KeyCode::Char('j') => {
             if let Some(s) = &app.subtitle {
                 if app.sub_cursor + 1 < s.lines.len() { app.sub_cursor += 1; }
+            }
+        }
+        KeyCode::PageUp => app.sub_cursor = app.sub_cursor.saturating_sub(10),
+        KeyCode::PageDown => {
+            if let Some(s) = &app.subtitle {
+                app.sub_cursor = (app.sub_cursor + 10).min(s.lines.len().saturating_sub(1));
+            }
+        }
+        KeyCode::Char('g') => app.sub_cursor = 0,
+        KeyCode::Char('G') => {
+            if let Some(s) = &app.subtitle {
+                app.sub_cursor = s.lines.len().saturating_sub(1);
             }
         }
         KeyCode::Char(' ') => app.toggle_line(),

@@ -1,4 +1,5 @@
 use crate::app::{App, View};
+use crate::util::{compute_viewport, truncate_left, truncate_right};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -75,15 +76,14 @@ fn draw_files_with_preview(f: &mut Frame, area: Rect, app: &App) {
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
         .split(area);
 
-    // 왼쪽: 파일 리스트
+    // 왼쪽: 파일 리스트 (unicode-safe truncate + viewport 스크롤)
+    let name_w = (hsplit[0].width as usize).saturating_sub(12);
     let items: Vec<ListItem> = app.files.iter().enumerate().map(|(i, f)| {
         let s = if f.has_output { "✂ " } else if f.has_subtitle { "✓ " } else { "  " };
         let style = if i == app.file_cursor {
             Style::default().bg(Color::DarkGray).fg(Color::White).add_modifier(Modifier::BOLD)
         } else { Style::default() };
-        let short = if f.name.len() > 50 {
-            format!("…{}", &f.name[f.name.len()-48..])
-        } else { f.name.clone() };
+        let short = truncate_left(&f.name, name_w);
         ListItem::new(format!("{s}{} ({})", short, human_size(f.size))).style(style)
     }).collect();
     let list = List::new(items)
@@ -91,6 +91,8 @@ fn draw_files_with_preview(f: &mut Frame, area: Rect, app: &App) {
             .title(format!(" 파일 ({}) ", app.files.len())));
     let mut state = ListState::default();
     state.select(Some(app.file_cursor));
+    let visible = (hsplit[0].height as usize).saturating_sub(2);
+    *state.offset_mut() = compute_viewport(app.file_cursor, visible, app.files.len());
     f.render_stateful_widget(list, hsplit[0], &mut state);
 
     // 오른쪽: 결과물
@@ -115,10 +117,12 @@ fn draw_subtitles(f: &mut Frame, area: Rect, app: &App) {
         app.selected_file.as_ref().map(|f| f.name.as_str()).unwrap_or(""),
         kept_cnt, sub.lines.len(), kept_dur, sub.total_duration);
 
+    let text_w = (area.width as usize).saturating_sub(18);
     let items: Vec<ListItem> = sub.lines.iter().enumerate().map(|(i, l)| {
         let mark = if l.kept { "[✓]" } else { "[ ]" };
         let t_start = fmt_time(l.start);
-        let base = format!("{mark} {t_start} │ {} ({:.1}s)", l.text, l.duration);
+        let text = truncate_right(&l.text, text_w);
+        let base = format!("{mark} {t_start} │ {} ({:.1}s)", text, l.duration);
         let mut style = if l.kept {
             Style::default().fg(Color::Green)
         } else {
@@ -133,6 +137,8 @@ fn draw_subtitles(f: &mut Frame, area: Rect, app: &App) {
         .block(Block::default().borders(Borders::ALL).title(title));
     let mut state = ListState::default();
     state.select(Some(app.sub_cursor));
+    let visible = (area.height as usize).saturating_sub(2);
+    *state.offset_mut() = compute_viewport(app.sub_cursor, visible, sub.lines.len());
     f.render_stateful_widget(list, area, &mut state);
 }
 
