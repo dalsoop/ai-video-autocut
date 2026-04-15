@@ -16,16 +16,28 @@ use std::io::stdout;
 use std::time::Duration;
 
 #[derive(Parser)]
-#[command(about = "autocut TUI — Qwen3-ASR + 컷편집")]
+#[command(
+    name = "autocut-tui",
+    version = env!("CARGO_PKG_VERSION"),
+    about = "autocut TUI — Qwen3-ASR + 컷편집",
+)]
 struct Cli {
     /// autocut-web endpoint (기본: config 또는 http://localhost:8080)
     #[arg(long)]
     endpoint: Option<String>,
+
+    /// 사용 가능 키바인드 출력 후 종료
+    #[arg(long)]
+    keys: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
+    if cli.keys {
+        print_keybinds();
+        return Ok(());
+    }
     let (mut cfg, cfg_err) = match config::load() {
         Ok(c) => (c, None),
         Err(e) => (config::Config::default(), Some(format!("config 로드 실패: {e} — 기본값 사용"))),
@@ -67,20 +79,34 @@ async fn run<B: ratatui::backend::Backend>(
             last_poll = std::time::Instant::now();
         }
 
-        if event::poll(Duration::from_millis(200))? {
+        if event::poll(Duration::from_millis(if app.job_progress.is_some() { 500 } else { 200 }))? {
             if let Event::Key(k) = event::read()? {
                 if k.kind != KeyEventKind::Press { continue; }
-                // 작업 중이면 ESC로 취소
-                if app.job_progress.is_some() && matches!(k.code, KeyCode::Esc) {
-                    app.cancel_job().await;
-                    continue;
-                }
-                // Ctrl+C 종료
+                // Ctrl+C 종료 (어디서든)
                 if matches!(k.code, KeyCode::Char('c')) && k.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
                     if app.job_progress.is_some() { app.cancel_job().await; }
                     app.should_quit = true;
                     break;
                 }
+                // 작업 중이면 ESC로 취소
+                if app.job_progress.is_some() && matches!(k.code, KeyCode::Esc) {
+                    app.cancel_job().await;
+                    continue;
+                }
+                // 검색 모드 우선
+                if app.search_mode {
+                    handle_search(app, k.code);
+                    continue;
+                }
+                // 도움말 모달 오픈 상태
+                if app.show_help {
+                    if matches!(k.code, KeyCode::Char('?') | KeyCode::Esc | KeyCode::Char('q')) {
+                        app.show_help = false;
+                    }
+                    continue;
+                }
+                // 전역 키
+                if matches!(k.code, KeyCode::Char('?')) { app.show_help = true; continue; }
                 match app.view {
                     View::Projects => handle_projects(app, k.code).await,
                     View::Files => handle_files(app, k.code).await,
@@ -91,6 +117,58 @@ async fn run<B: ratatui::backend::Backend>(
         }
     }
     Ok(())
+}
+
+fn print_keybinds() {
+    println!("autocut-tui v{} — 키바인드", env!("CARGO_PKG_VERSION"));
+    println!();
+    println!("[공통]");
+    println!("  ?           도움말 토글");
+    println!("  q           종료");
+    println!("  Ctrl+C      강제 종료 (진행중 작업 취소 포함)");
+    println!("  r           새로고침");
+    println!();
+    println!("[프로젝트 화면]");
+    println!("  ↑/k ↓/j     이동");
+    println!("  Enter       선택");
+    println!();
+    println!("[파일 화면]");
+    println!("  ↑/k ↓/j     이동, PgUp/PgDn 10개씩, g/G 맨위/아래");
+    println!("  Enter       파일 열기 (자막 있으면 편집 뷰)");
+    println!("  /           파일 이름 검색");
+    println!("  t           자막 추출");
+    println!("  e           엔진 토글 (qwen3 ↔ whisper)");
+    println!("  l           언어 토글");
+    println!("  p           프로젝트 선택으로");
+    println!();
+    println!("[자막 편집 화면]");
+    println!("  Space       라인 토글");
+    println!("  a           모두 유지");
+    println!("  n           모두 제거");
+    println!("  i           반전");
+    println!("  c           컷 실행");
+    println!("  Esc / b     파일 뷰로");
+    println!();
+    println!("[작업 중]");
+    println!("  Esc         작업 취소");
+}
+
+fn handle_search(app: &mut App, code: KeyCode) {
+    match code {
+        KeyCode::Esc => { app.search_mode = false; app.search_query.clear(); }
+        KeyCode::Enter => { app.search_mode = false; }
+        KeyCode::Backspace => { app.search_query.pop(); }
+        KeyCode::Char(c) => {
+            app.search_query.push(c);
+            // 검색 매칭 첫 항목으로 커서 이동
+            let q = app.search_query.to_lowercase();
+            if let Some((i, _)) = app.files.iter().enumerate()
+                .find(|(_, f)| f.name.to_lowercase().contains(&q)) {
+                app.file_cursor = i;
+            }
+        }
+        _ => {}
+    }
 }
 
 async fn handle_projects(app: &mut App, code: KeyCode) {
@@ -127,6 +205,7 @@ async fn handle_files(app: &mut App, code: KeyCode) {
         KeyCode::Char('t') => app.transcribe().await,
         KeyCode::Char('p') => app.view = View::Projects,
         KeyCode::Char('r') => app.refresh_files().await,
+        KeyCode::Char('/') => { app.search_mode = true; app.search_query.clear(); }
         KeyCode::Char('e') => {
             app.engine = if app.engine == "qwen3" { "whisper".into() } else { "qwen3".into() };
             app.status = format!("engine → {}", app.engine);

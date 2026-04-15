@@ -22,10 +22,14 @@ pub struct App {
     pub subtitle: Option<SubtitleData>,
     pub sub_cursor: usize,
     pub job_progress: Option<(String, u32, String)>,  // id, %, message
+    pub job_started: Option<std::time::Instant>,
     pub status: String,
     pub should_quit: bool,
     pub engine: String,
     pub lang: String,
+    pub show_help: bool,
+    pub search_mode: bool,
+    pub search_query: String,
 }
 
 impl App {
@@ -38,10 +42,23 @@ impl App {
             projects: vec![], active_project: None, project_cursor: 0,
             files: vec![], outputs: vec![], file_cursor: 0, selected_file: None,
             subtitle: None, sub_cursor: 0,
-            job_progress: None,
+            job_progress: None, job_started: None,
             status: "loading...".into(),
             should_quit: false,
             engine, lang,
+            show_help: false,
+            search_mode: false, search_query: String::new(),
+        }
+    }
+
+    pub fn filtered_files(&self) -> Vec<(usize, &crate::api::FileInfo)> {
+        if self.search_query.is_empty() {
+            self.files.iter().enumerate().collect()
+        } else {
+            let q = self.search_query.to_lowercase();
+            self.files.iter().enumerate()
+                .filter(|(_, f)| f.name.to_lowercase().contains(&q))
+                .collect()
         }
     }
 
@@ -115,6 +132,7 @@ impl App {
         match self.client.transcribe(&req).await {
             Ok(job) => {
                 self.job_progress = Some((job.id.clone(), 0, "자막 추출 중...".into()));
+                self.job_started = Some(std::time::Instant::now());
                 self.status = format!("{} 시작 ({})", job.job_type, self.engine);
             }
             Err(e) => self.status = format!("transcribe 실패: {e}"),
@@ -131,6 +149,7 @@ impl App {
         match self.client.cut(&req).await {
             Ok(job) => {
                 self.job_progress = Some((job.id, 0, "컷 편집 중...".into()));
+                self.job_started = Some(std::time::Instant::now());
                 self.status = "컷 시작".into();
             }
             Err(e) => self.status = format!("cut 실패: {e}"),
@@ -143,8 +162,10 @@ impl App {
             let msg = job.message.clone().unwrap_or_default();
             self.job_progress = Some((job.id.clone(), job.progress, msg));
             if job.status == "done" {
-                self.status = format!("✓ {} 완료", job.job_type);
+                let elapsed = self.job_started.map(|t| t.elapsed().as_secs()).unwrap_or(0);
+                self.status = format!("✓ {} 완료 ({}초)", job.job_type, elapsed);
                 self.job_progress = None;
+                self.job_started = None;
                 self.refresh_files().await;
                 if let Some(f) = &self.selected_file.clone() {
                     if let Ok(s) = self.client.subtitle(&f.name).await {
@@ -154,6 +175,7 @@ impl App {
             } else if job.status == "failed" {
                 self.status = format!("✗ 실패: {}", job.message.unwrap_or_default());
                 self.job_progress = None;
+                self.job_started = None;
             }
         }
     }

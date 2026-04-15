@@ -21,6 +21,48 @@ pub fn draw(f: &mut Frame, app: &App) {
         View::Subtitles => draw_subtitles(f, vsplit[1], app),
     }
     draw_footer(f, vsplit[2], app);
+    if app.show_help { draw_help(f, size); }
+}
+
+fn draw_help(f: &mut Frame, area: Rect) {
+    let w = (area.width * 4 / 5).min(60);
+    let h = (area.height * 4 / 5).min(24);
+    let popup = Rect {
+        x: (area.width - w) / 2,
+        y: (area.height - h) / 2,
+        width: w, height: h,
+    };
+    f.render_widget(ratatui::widgets::Clear, popup);
+    let lines = vec![
+        Line::from(Span::styled("autocut-tui 키바인드", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(""),
+        Line::from(Span::styled("  공통", Style::default().fg(Color::Yellow))),
+        Line::from("    ?           도움말 토글"),
+        Line::from("    q           종료 / Ctrl+C 강제 종료"),
+        Line::from("    r           새로고침"),
+        Line::from(""),
+        Line::from(Span::styled("  파일 화면", Style::default().fg(Color::Yellow))),
+        Line::from("    j/k ↑/↓     이동, PgUp/PgDn 10씩, g/G 처음/끝"),
+        Line::from("    Enter       파일 열기"),
+        Line::from("    /           파일명 검색"),
+        Line::from("    t           자막 추출"),
+        Line::from("    e           엔진 토글 / l 언어 토글"),
+        Line::from("    p           프로젝트 변경"),
+        Line::from(""),
+        Line::from(Span::styled("  자막 편집", Style::default().fg(Color::Yellow))),
+        Line::from("    Space       라인 토글  / a 모두 유지 / n 모두 제거 / i 반전"),
+        Line::from("    c           컷 실행"),
+        Line::from("    Esc, b      파일 뷰로"),
+        Line::from(""),
+        Line::from(Span::styled("  작업 진행 중", Style::default().fg(Color::Yellow))),
+        Line::from("    Esc         취소"),
+    ];
+    let p = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL)
+            .title(" ? 로 닫기 ")
+            .style(Style::default().bg(Color::Rgb(20, 20, 30))))
+        .wrap(Wrap { trim: false });
+    f.render_widget(p, popup);
 }
 
 fn draw_header(f: &mut Frame, area: Rect, app: &App) {
@@ -34,12 +76,19 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     let footer = if let Some((_, pct, msg)) = &app.job_progress {
+        let elapsed = app.job_started.map(|t| format!(" • {}초", t.elapsed().as_secs())).unwrap_or_default();
         let gauge = Gauge::default()
             .block(Block::default().borders(Borders::ALL)
-                .title(format!(" {msg}  [ESC로 취소] ")))
+                .title(format!(" {msg}{elapsed}  [ESC로 취소] ")))
             .gauge_style(Style::default().fg(Color::Green))
             .percent((*pct).min(100) as u16);
         f.render_widget(gauge, area);
+        return;
+    } else if app.search_mode {
+        let p = Paragraph::new(format!("/ {}", app.search_query))
+            .block(Block::default().borders(Borders::ALL).title(" 검색 (Enter 확정, Esc 취소) "))
+            .style(Style::default().fg(Color::Cyan));
+        f.render_widget(p, area);
         return;
     } else {
         match app.view {
