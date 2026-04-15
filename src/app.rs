@@ -46,6 +46,10 @@ pub struct App {
     pub preview_for: Option<String>,
     pub settings: RemoteSettings,
     pub settings_cursor: usize,
+    pub editing_line: bool,
+    pub edit_buffer: String,
+    pub sub_search: Option<String>,
+    pub pending_count: usize,
 }
 
 impl App {
@@ -68,7 +72,84 @@ impl App {
             preview: None, preview_for: None,
             settings: RemoteSettings::default(),
             settings_cursor: 0,
+            editing_line: false, edit_buffer: String::new(),
+            sub_search: None,
+            pending_count: 0,
         }
+    }
+
+    pub async fn refresh_pending(&mut self) {
+        if let Ok(list) = self.client.pending().await {
+            self.pending_count = list.len();
+        }
+    }
+
+    pub async fn batch_transcribe(&mut self) {
+        match self.client.batch_transcribe().await {
+            Ok(r) => {
+                let n = r.get("queued").and_then(|v| v.as_u64()).unwrap_or(0);
+                self.status = format!("✓ {n}개 파일 큐 등록 (순차 처리)");
+                self.refresh_pending().await;
+            }
+            Err(e) => self.status = format!("배치 실패: {e}"),
+        }
+    }
+
+    pub fn start_line_edit(&mut self) {
+        if let Some(sub) = &self.subtitle {
+            if let Some(l) = sub.lines.get(self.sub_cursor) {
+                self.editing_line = true;
+                self.edit_buffer = l.text.clone();
+            }
+        }
+    }
+
+    pub async fn commit_line_edit(&mut self) {
+        let Some(sub) = &self.subtitle else { self.editing_line = false; return };
+        let Some(l) = sub.lines.get(self.sub_cursor) else { self.editing_line = false; return };
+        let idx = l.index;
+        let new_text = self.edit_buffer.trim().to_string();
+        self.editing_line = false;
+        if new_text.is_empty() { return; }
+        let edits = serde_json::to_value(
+            sub.lines.iter().map(|x| serde_json::json!({
+                "index": x.index, "kept": x.kept,
+                "text": if x.index == idx { new_text.clone() } else { x.text.clone() },
+            })).collect::<Vec<_>>()
+        ).unwrap();
+        let Some(f) = self.selected_file.clone() else { return };
+        if let Err(e) = self.client.edit_lines(&f.name, edits).await {
+            self.status = format!("편집 실패: {e}");
+            return;
+        }
+        if let Ok(s) = self.client.subtitle(&f.name).await {
+            self.subtitle = Some(s);
+            self.status = "✓ 라인 편집 저장".into();
+        }
+    }
+
+    pub async fn split_current(&mut self) {
+        let Some(sub) = &self.subtitle else { return };
+        let Some(l) = sub.lines.get(self.sub_cursor) else { return };
+        let idx = l.index;
+        let Some(f) = self.selected_file.clone() else { return };
+        if let Err(e) = self.client.split_line(&f.name, idx).await {
+            self.status = format!("split 실패: {e}"); return;
+        }
+        if let Ok(s) = self.client.subtitle(&f.name).await { self.subtitle = Some(s); }
+        self.status = "✓ split".into();
+    }
+
+    pub async fn merge_current(&mut self) {
+        let Some(sub) = &self.subtitle else { return };
+        let Some(l) = sub.lines.get(self.sub_cursor) else { return };
+        let idx = l.index;
+        let Some(f) = self.selected_file.clone() else { return };
+        if let Err(e) = self.client.merge_line(&f.name, idx).await {
+            self.status = format!("merge 실패: {e}"); return;
+        }
+        if let Ok(s) = self.client.subtitle(&f.name).await { self.subtitle = Some(s); }
+        self.status = "✓ merge".into();
     }
 
     pub async fn open_settings(&mut self) {

@@ -139,6 +139,40 @@ impl Client {
             .send().await?.error_for_status()?;
         Ok(())
     }
+
+    pub async fn edit_lines(&self, filename: &str, edits: serde_json::Value) -> Result<()> {
+        let enc = encode_path(filename);
+        self.http.patch(format!("{}/api/subtitle/{}", self.base, enc))
+            .json(&serde_json::json!({ "edits": edits }))
+            .send().await?.error_for_status()?;
+        Ok(())
+    }
+
+    pub async fn split_line(&self, filename: &str, index: u32) -> Result<()> {
+        let enc = encode_path(filename);
+        self.http.patch(format!("{}/api/subtitle/{}", self.base, enc))
+            .json(&serde_json::json!({ "action": "split", "index": index }))
+            .send().await?.error_for_status()?;
+        Ok(())
+    }
+
+    pub async fn merge_line(&self, filename: &str, index: u32) -> Result<()> {
+        let enc = encode_path(filename);
+        self.http.patch(format!("{}/api/subtitle/{}", self.base, enc))
+            .json(&serde_json::json!({ "action": "merge", "index": index }))
+            .send().await?.error_for_status()?;
+        Ok(())
+    }
+
+    pub async fn batch_transcribe(&self) -> Result<serde_json::Value> {
+        Ok(self.http.post(format!("{}/api/jobs/transcribe-batch", self.base))
+            .send().await?.json().await?)
+    }
+
+    pub async fn pending(&self) -> Result<Vec<String>> {
+        Ok(self.http.get(format!("{}/api/pending", self.base))
+            .send().await?.json().await?)
+    }
 }
 
 fn encode_path(p: &str) -> String {

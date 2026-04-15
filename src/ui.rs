@@ -72,12 +72,16 @@ fn draw_help(f: &mut Frame, area: Rect) {
         Line::from("    Enter       파일 열기"),
         Line::from("    /           파일명 검색"),
         Line::from("    t           자막 추출"),
+        Line::from("    B           미추출 전체 배치 추출"),
         Line::from("    e           엔진 토글 / l 언어 토글"),
-        Line::from("    p           프로젝트 변경"),
+        Line::from("    s           설정 / p 프로젝트 변경"),
         Line::from(""),
         Line::from(Span::styled("  자막 편집", Style::default().fg(Color::Yellow))),
         Line::from("    Space       라인 토글  / a 모두 유지 / n 모두 제거 / i 반전"),
-        Line::from("    c           컷 실행"),
+        Line::from("    E           라인 텍스트 편집"),
+        Line::from("    S           라인 split / M 다음과 merge"),
+        Line::from("    /           자막 내 검색"),
+        Line::from("    c           컷 실행  / t 재추출"),
         Line::from("    Esc, b      파일 뷰로"),
         Line::from(""),
         Line::from(Span::styled("  작업 진행 중", Style::default().fg(Color::Yellow))),
@@ -101,7 +105,17 @@ fn draw_header(f: &mut Frame, area: Rect, app: &App) {
 }
 
 fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
-    let footer = if let Some((_, pct, msg)) = &app.job_progress {
+    let footer = if app.editing_line {
+        let p = Paragraph::new(format!("편집> {}", app.edit_buffer))
+            .block(Block::default().borders(Borders::ALL).title(" 자막 텍스트 편집 (Enter 저장, Esc 취소) "))
+            .style(Style::default().fg(Color::Yellow));
+        f.render_widget(p, area); return;
+    } else if let Some(q) = &app.sub_search {
+        let p = Paragraph::new(format!("/{}", q))
+            .block(Block::default().borders(Borders::ALL).title(" 자막 내 검색 (Enter, Esc) "))
+            .style(Style::default().fg(Color::Cyan));
+        f.render_widget(p, area); return;
+    } else if let Some((_, pct, msg)) = &app.job_progress {
         let elapsed = app.job_started.map(|t| format!(" • {}초", t.elapsed().as_secs())).unwrap_or_default();
         let gauge = Gauge::default()
             .block(Block::default().borders(Borders::ALL)
@@ -119,8 +133,8 @@ fn draw_footer(f: &mut Frame, area: Rect, app: &App) {
     } else {
         match app.view {
             View::Projects => "[↑/↓ 이동] [Enter 선택] [q 종료]".to_string(),
-            View::Files => "[↑/↓ 이동] [Enter 열기] [t 자막추출] [p 프로젝트] [r 새로고침] [q 종료]".into(),
-            View::Subtitles => "[↑/↓ 이동] [Space 토글] [a 유지] [i 반전] [c 컷] [t 재추출] [b 뒤로] [q 종료]".into(),
+            View::Files => format!("[↑/↓] [Enter] [t 추출] [B 배치({}대기)] [/ 검색] [s 설정] [p 프로젝트] [q]", app.pending_count),
+            View::Subtitles => "[↑/↓] [Space] [a/n/i] [E 편집] [S split] [M merge] [/ 검색] [c 컷] [t 재추출] [b] [q]".into(),
             View::Settings => "[↑/↓ 이동] [←/→ 값변경] [Enter 저장] [Esc 취소]".into(),
         }
     };

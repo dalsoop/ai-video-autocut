@@ -51,6 +51,7 @@ async fn main() -> Result<()> {
     app.refresh_projects().await;
     if app.active_project.is_some() {
         app.refresh_files().await;
+        app.refresh_pending().await;
         app.view = View::Files;
     }
 
@@ -227,6 +228,7 @@ async fn handle_files(app: &mut App, code: KeyCode) {
     if keys::matches(code, &kb.project) { app.view = View::Projects; return; }
     if keys::matches(code, &kb.refresh) { app.refresh_files().await; return; }
     if matches!(code, KeyCode::Char('s')) { app.open_settings().await; return; }
+    if matches!(code, KeyCode::Char('B')) { app.batch_transcribe().await; return; }
     if keys::matches(code, &kb.engine_toggle) {
         app.engine = if app.engine == "qwen3" { "whisper".into() } else { "qwen3".into() };
         app.status = format!("engine → {}", app.engine);
@@ -275,11 +277,48 @@ async fn handle_settings(app: &mut App, code: KeyCode) {
 }
 
 async fn handle_subs(app: &mut App, code: KeyCode) {
+    // 편집 중: 키를 텍스트 입력으로 처리
+    if app.editing_line {
+        match code {
+            KeyCode::Esc => { app.editing_line = false; app.edit_buffer.clear(); }
+            KeyCode::Enter => app.commit_line_edit().await,
+            KeyCode::Backspace => { app.edit_buffer.pop(); }
+            KeyCode::Char(c) => app.edit_buffer.push(c),
+            _ => {}
+        }
+        return;
+    }
+    // 검색 중
+    if let Some(_) = &app.sub_search {
+        match code {
+            KeyCode::Esc => app.sub_search = None,
+            KeyCode::Enter => app.sub_search = None,
+            KeyCode::Backspace => { if let Some(s) = &mut app.sub_search { s.pop(); } }
+            KeyCode::Char(c) => {
+                if let Some(s) = &mut app.sub_search {
+                    s.push(c);
+                    let q = s.to_lowercase();
+                    if let Some(sub) = &app.subtitle {
+                        if let Some((i, _)) = sub.lines.iter().enumerate()
+                            .find(|(_, l)| l.text.to_lowercase().contains(&q)) {
+                            app.sub_cursor = i;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        return;
+    }
     let kb = app.config.keybinds.clone();
     if keys::matches(code, &kb.quit) { app.should_quit = true; return; }
     if matches!(code, KeyCode::Esc) || keys::matches(code, &kb.back) {
         app.view = View::Files; return;
     }
+    if matches!(code, KeyCode::Char('E')) { app.start_line_edit(); return; }
+    if matches!(code, KeyCode::Char('S')) { app.split_current().await; return; }
+    if matches!(code, KeyCode::Char('M')) { app.merge_current().await; return; }
+    if matches!(code, KeyCode::Char('/')) { app.sub_search = Some(String::new()); return; }
     if keys::matches(code, &kb.toggle_line) { app.toggle_line(); return; }
     if keys::matches(code, &kb.keep_all) { app.select_all_lines(true); return; }
     if keys::matches(code, &kb.keep_none) { app.select_all_lines(false); return; }
