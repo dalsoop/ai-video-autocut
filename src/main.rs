@@ -18,7 +18,7 @@ use std::time::Duration;
 
 #[derive(Parser)]
 #[command(
-    name = "autocut-tui",
+    name = "ai-video-autocut",
     version = env!("CARGO_PKG_VERSION"),
     about = "autocut TUI — Qwen3-ASR + 컷편집",
 )]

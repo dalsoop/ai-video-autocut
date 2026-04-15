@@ -36,4 +36,4 @@ EOF
 echo "config 생성됨: /root/.config/autocut/config.ncl"
 fi'
 
-echo "완료. 사용: pct enter $VMID && autocut-tui"
+echo "완료. 사용: pct enter $VMID pct enter $VMID && autocut-tuipct enter $VMID && autocut-tui ai-video-autocut"
